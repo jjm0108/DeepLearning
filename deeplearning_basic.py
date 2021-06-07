@@ -157,7 +157,6 @@ class Dropout:
         return dout * self.mask
     
 
-
 # Affine-Sigmoid-Affine
 class TwoLayerNet:
     def __init__(self, input_size, hidden_size, output_size, weight_init_std = 0.01):
@@ -182,11 +181,6 @@ class TwoLayerNet:
         self.layers['Relu1'] = Relu()
         self.layers['Affine2'] = Affine(self.params['W1'], self.params['b1'])
         self.lastlayer = SoftmaxWithLoss()
-
-        # 각 계층의 모든 가중치를 params 리스트에 모은다
-        self.params = []
-        for layer in self.layers.values():
-            self.params += layer.params
 
     def predict(self, x):
         for layer in self.layers.values():
