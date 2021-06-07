@@ -1,139 +1,39 @@
-from collections import OrderedDict
+import collections
+from CNN import im2col
 import numpy as np
 
-class Relu:
-    def __init__(self):
-        self.mask = None
+class Convolution:
+    def __init__(self, W, b, stride, pad):
+        self.W = W
+        self.b = b
+        self.stride = stride
+        self.pad = pad
 
-    def forward(self, x):
-        self.mask = (x<=0)
-        out = x.copy()
-        out[self.mask] = 0
-        return out
-
-    def backward(self, dout):
-        dout[self.mask] = 0
-        dx = dout
-        return dx
-
-class Sigmoid:
-    def __init__(self):
-        self.out = None
-
-    def forward(self, x):
-        self.out = 1/(1+np.exp(-x))
-        return self.out
-
-    def backward(self,dout):
-        dx = dout * self.out * (1-self.out)
-        return dx
-
-class Affine:
-    def __init__(self, W, b):
-        self.params = [W, b]
         self.x = None
+        self.col = None
+        self.col_W = None
 
     def forward(self, x):
-        self.x = x
-        W, b = self.params
-        out = np.matmul(x,W) + b
+        N, C, H, W = self.x.shape
+        FN, C, FH, FW = self.W.shape
+
+        out_H = (H + 2*self.pad - FH + 1) / self.stride
+        out_W = (W + 2*self.pad - FW + 1) / self.stride
+
+        col = im2col(x, FH, FW, self.stride, self.pad)
+        col_W = W.reshape(FN, -1).T
+
+        out = np.dot(col, col_W) + self.b
+        out = out.reshape(FN, FH, FW, -1).transpose(0,3,1,2)
         return out
 
     def backward(self, dout):
-        W, b = self.params
-        dx = np.matmul(dout, W.T)
-        dw = np.matmul(self.x.T, dout)
+        FN, C, FH, FW = self.W.shape
+
+        dout = dout.transpose(0,2,3,1).reshape(-1, FN)
         db = np.sum(dout, axis=0)
+        dW = np.dot(self.col.T, dout)
+        dW = dW.transpose(1,0).reshape(FN,C,FH,FW)
+        dcol = np.dot(dout, self.col_W.T)
+        dx = col2im(dcol, self.x.shape, FH, FW, self.stride, self.pad)
         return dx
-
-class SoftmaxWithLoss:
-    def __init__(self):
-        self.loss = None
-        self.y = None
-        self.t = None
-
-    def forward(self, x, t):
-        self.y = self.softmax(x)
-        self.t = t
-        loss = self.cross_entropy_error(self.y, self.t)
-        return loss
-
-    def backward(self, dout):
-        batch_size = self.y.shape[0]
-        dx = (self.y-self.t) / batch_size
-        return dx
-
-    def softmax(self, x):
-        x = x - np.max(x) # 오버플로 방지
-        return np.exp(x) / np.sum(np.exp(x))
-
-    def cross_entropy_error(self, y, t):
-        delta = 1e-7
-        batch_size = y.shape[0]
-        return -np.sum(t*np.log(y+delta)) / batch_size
-
-class TwoLayerNet:
-    def __init__(self, input_size, hidden_size, output_size):
-        I, H, O = input_size, hidden_size, output_size
-
-        # 가중치 초기화
-        self.params = {}
-        self.params['W1'] = np.random.randn(I,H)
-        self.params['b1'] = np.zeros(H)
-        self.params['W2'] = np.random.randn(H,O)
-        self.params['b2'] = np.zeros(O)
-
-        # 계층 생성
-        self.layers = OrderedDict()
-        self.layers['Affine1'] = Affine(self.params['W1'], self.params['b1'])
-        self.layers['Relu1'] = Relu()
-        self.layers['Affine2'] = Affine(self.params['W1'], self.params['b1'])
-        self.lastlayer = SoftmaxWithLoss()
-
-    def predict(self, x):
-        for layer in self.layers.values():
-            x = layer.forward(x)
-        return x
-    
-    def loss(self, x, t):
-        y = self.predict(x)
-        loss = self.lastlayer.forward(y,t)
-        return loss
-
-    def accuracy(self, x, t):
-        y = self.predict(x)
-        y = np.argmax(y, axis=1)
-        if t.ndim != 1 : t = np.argmax(t, axis=1)
-        batch_size = x.shape[0]
-        accuracy = np.sum(y==t) / float(batch_size)
-        return accuracy
-
-    def gradient(self, x, t):
-        dout = self.loss(x,t)
-        dout = self.lastlayer.backward(dout)
-
-        layers = list(self.layers.values())
-        layers.reverse()
-        for layer in layers:
-            dout = layer.backward(dout)
-
-        grads = {}
-        grads['W1'] = self.layers['Affine1'].dW
-        grads['b1'] = self.layers['Affine1'].db
-        grads['W2'] = self.layers['Affine2'].dW
-        grads['b2'] = self.layers['Affine2'].db
-
-        return grads
-
-
-from minst import load_mnist
-x_train, t_train, x_test, t_test = load_mnist(normalize=True, one_hot_label=True)
-
-
-
-
-
-
-
-
-
