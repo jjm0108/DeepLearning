@@ -101,7 +101,7 @@ def data_analysis(df, save_folder):
 
 def data_preprocessing():
 
-    data = pd.read_csv("iris.csv")    
+    data = pd.read_csv("iris.csv").rename(columns={'variety':'species'})    
     
     ## expected purpose 
     supervised_df = data['species']
@@ -424,7 +424,7 @@ class AverageMeter():
 if __name__ == '__main__':
 
     ## data read
-    data = pd.read_csv("iris.csv")
+    data = pd.read_csv("iris.csv").rename(columns={'variety':'species'})
 
     save_path = 'iris_result'
     os.makedirs(save_path, exist_ok=True)

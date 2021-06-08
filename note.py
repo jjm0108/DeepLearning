@@ -37,3 +37,18 @@ class Convolution:
         dcol = np.dot(dout, self.col_W.T)
         dx = col2im(dcol, self.x.shape, FH, FW, self.stride, self.pad)
         return dx
+
+class Pooling:
+    def __init__(self, pool_h, pool_w, stride, pad):
+        self.pool_h = pool_h
+        self.pool_w = pool_w
+        self.stride = stride
+        self.pad = pad
+
+    def forward(self, x):
+        N, C, H, W = x.shape
+        col = im2col(x, self.pool_h, self.pool_w, self.stride, self.pad)
+        col = col.reshape(-1, self.pool_h*self.pool_w)
+        out = np.max(col, axis=1)
+        out = out.reshape(N, out_h, out_w, -1).transpose(0,3,1,2)
+        return out
