@@ -16,7 +16,7 @@ import os,sys
 sys.path.insert(0, os.getcwd()) 
 from data_analysis_module import *
 
-df = pd.read_csv('DeepLearning/Pytorch/PV_Elec_Gas3.csv').rename(columns={'date':'timestamp'}).set_index('timestamp')
+df = pd.read_csv('DeepLearning/Pytorch/PV_Elec_Gas3.csv').rename(columns={'date':'timestamp'})
 #df = ImportFDCData("1")
 
 print('*'*50)
@@ -32,15 +32,13 @@ pred_param = 'Gas/day'
 #pred_param = 'Ch 1 Onboard Cryo Temp 1st Stage'
 
 #split dataset to train/valid
-train_set = df[:'31/10/2018']
-valid_set = df['1/11/2018':'18/11/2019']
-# train_set_split_ratio = 0.1
-# valid_set_split_ratio = 0.1
-# train_set_split = int(len(df)*train_set_split_ratio)
-# valid_set_split = int(len(df)*(train_set_split_ratio + valid_set_split_ratio))
+train_set_split_ratio = 0.78
+valid_set_split_ratio = 0.12
+train_set_split = int(len(df)*train_set_split_ratio)
+valid_set_split = int(len(df)*(train_set_split_ratio + valid_set_split_ratio))
 
-# train_set = df[:train_set_split]
-# valid_set = df[train_set_split:valid_set_split]
+train_set = df[:train_set_split]
+valid_set = df[train_set_split+1:valid_set_split]
 
 # show the proportion of each dataset
 print('Proportion of train_set : {:.2f}%'.format(len(train_set)/len(df)))
@@ -125,6 +123,8 @@ criterion = nn.MSELoss() # Mean Squared Error
 n_features = 1 # for univariate series, the number of features is one, for one variable.
 train = MyDataset(train_x.reshape(train_x.shape[0],train_x.shape[1],n_features),train_y)
 valid = MyDataset(valid_x.reshape(valid_x.shape[0],valid_x.shape[1],n_features),valid_y)
+print(type(train.feature))
+print(train.feature.shape)
 
 train_loader = torch.utils.data.DataLoader(train,batch_size=2,shuffle=False)
 valid_loader = torch.utils.data.DataLoader(valid,batch_size=2,shuffle=False)
