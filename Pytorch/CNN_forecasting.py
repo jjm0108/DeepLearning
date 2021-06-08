@@ -16,8 +16,8 @@ import os,sys
 sys.path.insert(0, os.getcwd()) 
 from data_analysis_module import *
 
-df = pd.read_csv('DeepLearning/Pytorch/PV_Elec_Gas3.csv').rename(columns={'date':'timestamp'})
-#df = ImportFDCData("1")
+#df = pd.read_csv('DeepLearning/Pytorch/PV_Elec_Gas3.csv').rename(columns={'date':'timestamp'})
+df = ImportFDCData("1")[:100]
 
 print('*'*50)
 print('data : \n{}'.format(df)) 
@@ -28,21 +28,29 @@ print(f'data length: {len(df)}')
 print('*'*50)
 
 # split dataset to train/valid
-pred_param = 'Gas/day'
-#pred_param = 'Ch 1 Onboard Cryo Temp 1st Stage'
+#pred_param = 'Gas/day'
+pred_param = 'Ch 1 Onboard Cryo Temp 1st Stage'
 
 #split dataset to train/valid
-train_set_split_ratio = 0.78
-valid_set_split_ratio = 0.12
-train_set_split = int(len(df)*train_set_split_ratio)
+train_set_split_ratio = 0.4
+valid_set_split_ratio = 0.2
+test_set_split_ratio = 1 - train_set_split_ratio - valid_set_split_ratio
+train_set_split = int(len(df)*train_set_split_ratio) if int(len(df)*train_set_split_ratio)%2!=0 else int(len(df)*train_set_split_ratio)+1
 valid_set_split = int(len(df)*(train_set_split_ratio + valid_set_split_ratio))
+test_set_split = int(len(df)*test_set_split_ratio)
 
 train_set = df[:train_set_split]
-valid_set = df[train_set_split+1:valid_set_split]
+valid_set = df[train_set_split:valid_set_split]
+test_set = df[-test_set_split:]
+
+print(f'length of train_set : {len(train_set)}')
+print(f'length of valid_set : {len(valid_set)}')
 
 # show the proportion of each dataset
+print('*'*50)
 print('Proportion of train_set : {:.2f}%'.format(len(train_set)/len(df)))
 print('Proportion of valid_set : {:.2f}%'.format(len(valid_set)/len(df)))
+print('*'*50)
 
 # The split_sequence() function below will split a given univariate sequence into multiple samples 
 # where each sample has a specified number of time steps and the output is a single time step.
@@ -64,10 +72,6 @@ train_x,train_y = split_sequence(train_set[pred_param].values,n_steps)
 valid_x,valid_y = split_sequence(valid_set[pred_param].values,n_steps)
 
 # summarize the data
-print('*'*50)
-print(type(train_x))
-print(train_x.shape)
-
 print("train_x, train_y splitted  : ")
 for i in range(10):
 	print(train_x[i], train_y[i])
@@ -96,7 +100,7 @@ class CNN_ForecastNet(nn.Module):
         super(CNN_ForecastNet,self).__init__()
         self.conv1d = nn.Conv1d(n_steps,64,kernel_size=1)
         self.relu = nn.ReLU(inplace=True)
-        self.fc1 = nn.Linear(64*2,50)
+        self.fc1 = nn.Linear(64,50)
         self.fc2 = nn.Linear(50,1)
         
     def forward(self,x):
@@ -123,11 +127,9 @@ criterion = nn.MSELoss() # Mean Squared Error
 n_features = 1 # for univariate series, the number of features is one, for one variable.
 train = MyDataset(train_x.reshape(train_x.shape[0],train_x.shape[1],n_features),train_y)
 valid = MyDataset(valid_x.reshape(valid_x.shape[0],valid_x.shape[1],n_features),valid_y)
-print(type(train.feature))
-print(train.feature.shape)
 
-train_loader = torch.utils.data.DataLoader(train,batch_size=2,shuffle=False)
-valid_loader = torch.utils.data.DataLoader(valid,batch_size=2,shuffle=False)
+train_loader = torch.utils.data.DataLoader(train,batch_size=1,shuffle=False)
+valid_loader = torch.utils.data.DataLoader(valid,batch_size=1,shuffle=False)
 
 torch.set_default_tensor_type(torch.DoubleTensor)
 
@@ -172,7 +174,7 @@ def Valid():
         valid_losses.append(valid_loss.detach().numpy())
         print(f'valid_loss {valid_loss}')
 
-epochs = 200
+epochs = 10
 for epoch in range(epochs):
     print('epochs {}/{}'.format(epoch+1,epochs))
     Train()
@@ -183,7 +185,7 @@ for epoch in range(epochs):
         plt.plot(train_losses,label='train_loss')
         plt.plot(valid_losses,label='valid_loss')
         plt.title(f'Epoch {epoch}\'s MSE Loss')
-        plt.ylim(0, 10)
+        plt.ylim(0, 1)
         plt.legend(loc='upper left')
         plt.show(block=False)
         plt.pause(3)
@@ -193,24 +195,31 @@ for epoch in range(epochs):
 plt.plot(train_losses,label='train_loss')
 plt.plot(valid_losses,label='valid_loss')
 plt.title('Final MSE Loss')
-plt.ylim(0, 10)
+plt.xlim(0, epochs)
+plt.ylim(0, 1)
 plt.legend(loc='upper left')
 
-target_x , target_y = split_sequence(train_set[pred_param].values,n_steps)
-inputs = target_x.reshape(target_x.shape[0],target_x.shape[1],1)
+test_x , test_y = split_sequence(test_set[pred_param].values,n_steps)
+inputs = test_x.reshape(test_x.shape[0],test_x.shape[1],n_features)
+print('*'*50)
+print(f'length of train_x, train_y : {len(test_x)} , {len(test_y)}')
+print('*'*50)
 
 model.eval()
 prediction = []
 batch_size = 2
-iterations =  int(inputs.shape[0]/2)
+iterations =  int(inputs.shape[0])
 
 for i in range(iterations):
-    preds = model(torch.tensor(inputs[batch_size*i:batch_size*(i+1)]).float())
+    preds = model(torch.tensor([inputs[i]]).float())
     prediction.append(preds.detach().numpy())
 
-fig, ax = plt.subplots(1, 2,figsize=(11,4))
-ax[0].set_title('predicted one')
-ax[0].plot(prediction)
-ax[1].set_title('real one')
-ax[1].plot(target_y)
+plt.figure(figsize=(16,8), dpi=100)
+plt.title("result")
+print(prediction)
+print(test_y)
+print(len(prediction))
+print(len(test_y))
+plt.plot(prediction, label="predicted one")
+plt.plot(test_y, label="real one")
 plt.show()
