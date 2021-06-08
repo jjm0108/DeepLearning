@@ -4,32 +4,43 @@ import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 # Input data files are available in the "../input/" directory.
 # For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
 
-import os
-for dirname, _, filenames in os.walk('/kaggle/input'):
-    for filename in filenames:
-        print(os.path.join(dirname, filename))
-
 # Any results you write to the current directory are saved as output.
 from numpy import array
 import torch
 import gc
 import torch.nn as nn
 from torch.utils.data import Dataset
+import matplotlib.pyplot as plt
 
-# import datset
-df = pd.read_csv('./Pytorch/PV_Elec_Gas3.csv').rename(columns={'date':'timestamp'}).set_index('timestamp')
-# for param in df.columns:
-#     df[param] = df[param].astype('float32').dtypes
+import os,sys
+sys.path.insert(0, os.getcwd()) 
+from data_analysis_module import *
+
+df = pd.read_csv('DeepLearning/Pytorch/PV_Elec_Gas3.csv').rename(columns={'date':'timestamp'}).set_index('timestamp')
+#df = ImportFDCData("1")
 
 print('*'*50)
 print('data : \n{}'.format(df)) 
 print('*'*50)
-print('\ndata type : \n{}'.format(df.dtypes))
+# print('\ndata type : \n{}'.format(df.dtypes))
+# print('*'*50)
+print(f'data length: {len(df)}') 
 print('*'*50)
 
 # split dataset to train/valid
+pred_param = 'Gas/day'
+#pred_param = 'Ch 1 Onboard Cryo Temp 1st Stage'
+
+#split dataset to train/valid
 train_set = df[:'31/10/2018']
 valid_set = df['1/11/2018':'18/11/2019']
+# train_set_split_ratio = 0.1
+# valid_set_split_ratio = 0.1
+# train_set_split = int(len(df)*train_set_split_ratio)
+# valid_set_split = int(len(df)*(train_set_split_ratio + valid_set_split_ratio))
+
+# train_set = df[:train_set_split]
+# valid_set = df[train_set_split:valid_set_split]
 
 # show the proportion of each dataset
 print('Proportion of train_set : {:.2f}%'.format(len(train_set)/len(df)))
@@ -51,14 +62,20 @@ def split_sequence(sequence, n_steps):
     return array(x), array(y)
 
 n_steps = 3
-train_x,train_y = split_sequence(train_set['Gas/day'].values,n_steps)
-valid_x,valid_y = split_sequence(valid_set['Gas/day'].values,n_steps)
+train_x,train_y = split_sequence(train_set[pred_param].values,n_steps)
+valid_x,valid_y = split_sequence(valid_set[pred_param].values,n_steps)
 
 # summarize the data
 print('*'*50)
+print(type(train_x))
+print(train_x.shape)
+
 print("train_x, train_y splitted  : ")
 for i in range(10):
 	print(train_x[i], train_y[i])
+print('*'*50)
+print(f'length of train_x, train_y : {len(train_x)} , {len(train_y)}')
+print(f'length of valid_x, valid_y : {len(valid_x)} , {len(valid_y)}')
 print('*'*50)
 
 class MyDataset(Dataset):
@@ -162,14 +179,24 @@ for epoch in range(epochs):
     Valid()
     gc.collect()
 
-import matplotlib.pyplot as plt
+    if epoch%10==0:
+        plt.plot(train_losses,label='train_loss')
+        plt.plot(valid_losses,label='valid_loss')
+        plt.title(f'Epoch {epoch}\'s MSE Loss')
+        plt.ylim(0, 10)
+        plt.legend(loc='upper left')
+        plt.show(block=False)
+        plt.pause(3)
+        plt.close()
+
+
 plt.plot(train_losses,label='train_loss')
 plt.plot(valid_losses,label='valid_loss')
-plt.title('MSE Loss')
-plt.ylim(0, 100)
-plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+plt.title('Final MSE Loss')
+plt.ylim(0, 10)
+plt.legend(loc='upper left')
 
-target_x , target_y = split_sequence(train_set.Elec_kW.values,n_steps)
+target_x , target_y = split_sequence(train_set[pred_param].values,n_steps)
 inputs = target_x.reshape(target_x.shape[0],target_x.shape[1],1)
 
 model.eval()
